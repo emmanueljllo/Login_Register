@@ -9,12 +9,17 @@
         "preview": "vite preview"
     },
     "dependencies": {
+        "@popperjs/core": "^2.11.8",
+        "axios": "^1.7.9",
+        "bootstrap": "^5.3.8",
         "vue": "^3.5.13",
-        "vue-router": "^4.5.0",
-        "axios": "^1.7.9"
+        "vue-router": "^4.5.0"
     },
     "devDependencies": {
+        "@types/node": "^25.0.9",
         "@vitejs/plugin-vue": "^5.2.1",
-        "vite": "^6.0.7"
+        "typescript": "^5.9.3",
+        "vite": "^6.0.7",
+        "vue-tsc": "^3.2.2"
     }
 }

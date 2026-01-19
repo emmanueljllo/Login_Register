@@ -1,31 +1,26 @@
-using Backend.Data;
-using Backend.Models;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
+using Backend.Application.DTOs;
+using Backend.Application.Interfaces;
+using Backend.Domain.Entities;
+using Backend.Domain.Interfaces;
 
-namespace Backend.Services;
+namespace Backend.Application.Services;
 
 public class AuthService : IAuthService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly IConfiguration _configuration;
+    private readonly IUserRepository _userRepository;
+    private readonly IJwtTokenGenerator _jwtTokenGenerator;
 
-    public AuthService(ApplicationDbContext context, IConfiguration configuration)
+    public AuthService(IUserRepository userRepository, IJwtTokenGenerator jwtTokenGenerator)
     {
-        _context = context;
-        _configuration = configuration;
+        _userRepository = userRepository;
+        _jwtTokenGenerator = jwtTokenGenerator;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
     {
         try
         {
-            // Check if user already exists
-            var existingUser = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
+            var existingUser = await _userRepository.GetByEmailAsync(request.Email);
 
             if (existingUser != null)
             {
@@ -36,23 +31,21 @@ public class AuthService : IAuthService
                 };
             }
 
-            // Hash password
             var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
 
-            // Create new user
             var user = new User
             {
                 Email = request.Email.ToLower(),
                 PasswordHash = passwordHash,
                 FullName = request.FullName,
+                Role = request.Role,
                 CreatedAt = DateTime.UtcNow
             };
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+            await _userRepository.AddAsync(user);
+            await _userRepository.SaveChangesAsync();
 
-            // Generate JWT token
-            var token = GenerateJwtToken(user);
+            var token = _jwtTokenGenerator.GenerateToken(user);
 
             return new AuthResponse
             {
@@ -63,7 +56,8 @@ public class AuthService : IAuthService
                 {
                     Id = user.Id,
                     Email = user.Email,
-                    FullName = user.FullName
+                    FullName = user.FullName,
+                    Role = user.Role
                 }
             };
         }
@@ -81,9 +75,7 @@ public class AuthService : IAuthService
     {
         try
         {
-            // Find user by email
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
+            var user = await _userRepository.GetByEmailAsync(request.Email);
 
             if (user == null)
             {
@@ -94,7 +86,6 @@ public class AuthService : IAuthService
                 };
             }
 
-            // Verify password
             var isValidPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
 
             if (!isValidPassword)
@@ -106,8 +97,7 @@ public class AuthService : IAuthService
                 };
             }
 
-            // Generate JWT token
-            var token = GenerateJwtToken(user);
+            var token = _jwtTokenGenerator.GenerateToken(user);
 
             return new AuthResponse
             {
@@ -118,7 +108,8 @@ public class AuthService : IAuthService
                 {
                     Id = user.Id,
                     Email = user.Email,
-                    FullName = user.FullName
+                    FullName = user.FullName,
+                    Role = user.Role
                 }
             };
         }
@@ -130,30 +121,5 @@ public class AuthService : IAuthService
                 Message = $"Error al iniciar sesión: {ex.Message}"
             };
         }
-    }
-
-    private string GenerateJwtToken(User user)
-    {
-        var jwtSettings = _configuration.GetSection("JwtSettings");
-        var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Email, user.Email),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
-
-        var token = new JwtSecurityToken(
-            issuer: jwtSettings["Issuer"],
-            audience: jwtSettings["Audience"],
-            claims: claims,
-            expires: DateTime.UtcNow.AddDays(7),
-            signingCredentials: credentials
-        );
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

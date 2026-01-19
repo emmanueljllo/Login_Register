@@ -1,23 +1,22 @@
 import axios from 'axios'
+import type { LoginRequest, RegisterRequest, AuthResponse, User } from '../types/auth'
 
-const API_URL = 'https://localhost:7126/api/auth'
+const API_URL = 'http://localhost:5109/api/auth'
 
 const authService = {
-    async register(email, password, fullName) {
+    async register(data: RegisterRequest): Promise<AuthResponse> {
         try {
-            const response = await axios.post(`${API_URL}/register`, {
-                email,
-                password,
-                fullName
-            })
+            const response = await axios.post<AuthResponse>(`${API_URL}/register`, data)
 
             if (response.data.success && response.data.token) {
                 localStorage.setItem('authToken', response.data.token)
-                localStorage.setItem('user', JSON.stringify(response.data.user))
+                if (response.data.user) {
+                    localStorage.setItem('user', JSON.stringify(response.data.user))
+                }
             }
 
             return response.data
-        } catch (error) {
+        } catch (error: any) {
             if (error.response && error.response.data) {
                 return error.response.data
             }
@@ -28,20 +27,19 @@ const authService = {
         }
     },
 
-    async login(email, password) {
+    async login(data: LoginRequest): Promise<AuthResponse> {
         try {
-            const response = await axios.post(`${API_URL}/login`, {
-                email,
-                password
-            })
+            const response = await axios.post<AuthResponse>(`${API_URL}/login`, data)
 
             if (response.data.success && response.data.token) {
                 localStorage.setItem('authToken', response.data.token)
-                localStorage.setItem('user', JSON.stringify(response.data.user))
+                if (response.data.user) {
+                    localStorage.setItem('user', JSON.stringify(response.data.user))
+                }
             }
 
             return response.data
-        } catch (error) {
+        } catch (error: any) {
             if (error.response && error.response.data) {
                 return error.response.data
             }
@@ -52,18 +50,22 @@ const authService = {
         }
     },
 
-    logout() {
+    logout(): void {
         localStorage.removeItem('authToken')
         localStorage.removeItem('user')
     },
 
-    getCurrentUser() {
+    getCurrentUser(): User | null {
         const userStr = localStorage.getItem('user')
         return userStr ? JSON.parse(userStr) : null
     },
 
-    isAuthenticated() {
+    isAuthenticated(): boolean {
         return !!localStorage.getItem('authToken')
+    },
+
+    getToken(): string | null {
+        return localStorage.getItem('authToken')
     }
 }
 
